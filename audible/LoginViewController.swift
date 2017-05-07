@@ -8,13 +8,18 @@
 
 import UIKit
 
-class ViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout  {
+protocol LoginControllerDelegate:class {
+    func finishLogin()
+}
+
+class LoginViewController: UIViewController, UICollectionViewDataSource, UICollectionViewDelegate, UICollectionViewDelegateFlowLayout, LoginControllerDelegate{
 
     let cellId = "cellId"
     let loginCellId = "loginCellId"
     var pageControlBottomAnchor: NSLayoutConstraint?
     var skipButtomTopAnchor: NSLayoutConstraint?
     var nextButtomTopAnchor: NSLayoutConstraint?
+    
     lazy var collectionView:UICollectionView = {
     
         let layout = UICollectionViewFlowLayout()
@@ -56,35 +61,36 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         button.setTitle("Skip", for: .normal)
         button.setTitleColor(UIColor(red: 247/255, green: 154/255, blue: 27/255, alpha: 1), for: .normal)
         button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(skipToLoginPage), for: .touchUpInside)
         return button
         
     }()
     
-    let nextButton: UIButton = {
+    lazy var nextButton: UIButton = {
         
         let button = UIButton(type: .system)
         button.setTitle("Next", for: .normal)
         button.setTitleColor(UIColor(red: 247/255, green: 154/255, blue: 27/255, alpha: 1), for: .normal)
         button.translatesAutoresizingMaskIntoConstraints = false
+        button.addTarget(self, action: #selector(nextPage), for: .touchUpInside)
         
         return button
     }()
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        self.view.addSubview(collectionView)
+        observeKeyboardNotifications()
+        addSubviews()
         collectionView.frame = view.frame
         setupCollectionViewConstraints()
         registerCell()
-        addSubviews()
         setUpViews()
     }
     
     fileprivate func registerCell(){
     
         collectionView.register(PageCell.self, forCellWithReuseIdentifier: cellId)
-        collectionView.register(UICollectionViewCell.self, forCellWithReuseIdentifier: loginCellId)
+        collectionView.register(LoginCell.self, forCellWithReuseIdentifier: loginCellId)
     }
     
     func setupCollectionViewConstraints(){
@@ -104,7 +110,9 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         
         if indexPath.item == pages.count{
         
-            let loginCell = self.collectionView.dequeueReusableCell(withReuseIdentifier: loginCellId, for: indexPath)
+            let loginCell = self.collectionView.dequeueReusableCell(withReuseIdentifier: loginCellId, for: indexPath) as! LoginCell
+            
+            loginCell.loginContollerDelegate = self
             
             return loginCell
         }
@@ -122,7 +130,7 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
     }
     
     func addSubviews(){
-    
+        self.view.addSubview(collectionView)
         self.view.addSubview(pageContol)
         self.view.addSubview(skipButton)
         self.view.addSubview(nextButton)
@@ -130,7 +138,7 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
     
     func setUpViews(){
     
-        pageControlBottomAnchor = pageContol.bottomAnchor.constraint(equalTo: collectionView.bottomAnchor, constant: -30)
+        pageControlBottomAnchor = pageContol.bottomAnchor.constraint(equalTo: collectionView.bottomAnchor, constant: -15)
         pageControlBottomAnchor?.isActive = true
         pageContol.centerXAnchor.constraint(equalTo: self.view.centerXAnchor).isActive = true
         pageContol.widthAnchor.constraint(equalToConstant: 10).isActive = true
@@ -155,9 +163,70 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         
         let currentPage = Int(targetContentOffset.pointee.x / self.view.frame.width)
         self.pageContol.currentPage = currentPage
+        removeTopButtons()
         
+    }
+    
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        
+        self.view.endEditing(true)
+    }
+    
+    fileprivate func observeKeyboardNotifications(){
+    
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardShow), name: NSNotification.Name.UIKeyboardWillShow, object: nil)
+        
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillHide), name: NSNotification.Name.UIKeyboardWillHide, object: nil)
+    }
+    
+    func keyboardShow(){
+    
+        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 1, options: .curveEaseOut, animations: {
+            
+            let yValue:CGFloat = UIDevice.current.orientation.isLandscape ? -115: -50
+            
+            self.view.frame = CGRect(x: 0, y: yValue, width: self.view.frame.width, height: self.view.frame.height)
+            
+        }, completion: nil)
+    }
+    
+    func keyboardWillHide(){
+        
+        UIView.animate(withDuration: 0.5, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 1, options: .curveEaseOut, animations: {
+            
+            self.view.frame = CGRect(x: 0, y: 0, width: self.view.frame.width, height: self.view.frame.height)
+            
+        }, completion: nil)
+    }
+    
+    func nextPage(){
+    
+        let indexPath = IndexPath(item: self.pageContol.currentPage + 1, section: 0)
+        self.collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
+        
+        self.pageContol.currentPage += 1
+        
+        if (self.pageContol.currentPage == self.pages.count){
+        
+            removeTopButtons()
+        }
+        
+    }
+    
+    func skipToLoginPage(){
+        
+        //let indexPath = IndexPath(item: self.pages.count, section: 0)
+        //self.collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
+        
+        self.pageContol.currentPage = self.pages.count - 1
+        nextPage()
+        //removeTopButtons()
+    }
+    
+    func removeTopButtons(){
+    
         if (pageContol.currentPage == self.pages.count){
-        
+            
             pageControlBottomAnchor?.isActive = false
             pageControlBottomAnchor = pageContol.bottomAnchor.constraint(equalTo: collectionView.bottomAnchor, constant: 40)
             pageControlBottomAnchor?.isActive = true
@@ -165,15 +234,15 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
             nextButtomTopAnchor?.isActive = false
             nextButtomTopAnchor = nextButton.topAnchor.constraint(equalTo: view.topAnchor, constant: -40)
             nextButtomTopAnchor?.isActive = true
-
+            
             skipButtomTopAnchor?.isActive = false
             skipButtomTopAnchor = skipButton.topAnchor.constraint(equalTo: view.topAnchor, constant: -40)
             skipButtomTopAnchor?.isActive = true
             
-            
         }else{
+            
             pageControlBottomAnchor?.isActive = false
-            pageControlBottomAnchor = pageContol.bottomAnchor.constraint(equalTo: collectionView.bottomAnchor, constant: -30)
+            pageControlBottomAnchor = pageContol.bottomAnchor.constraint(equalTo: collectionView.bottomAnchor, constant: -15)
             pageControlBottomAnchor?.isActive = true
             
             nextButtomTopAnchor?.isActive = false
@@ -186,10 +255,36 @@ class ViewController: UIViewController, UICollectionViewDataSource, UICollection
         }
         
         UIView.animate(withDuration: 0.4, delay: 0, options: .curveEaseOut, animations: {
-        
+            
             self.view.layoutIfNeeded()
             
         }, completion: nil)
+    }
+    
+    override func willTransition(to newCollection: UITraitCollection, with coordinator: UIViewControllerTransitionCoordinator) {
+        
+        self.collectionView.collectionViewLayout.invalidateLayout()
+        let indexPath = IndexPath(item: self.pageContol.currentPage, section: 0)
+        
+        DispatchQueue.main.async {
+            
+            self.collectionView.scrollToItem(at: indexPath, at: .centeredHorizontally, animated: true)
+            
+            self.collectionView.reloadData()
+        }
+    }
+    
+    func finishLogin(){
+    
+        let rootViewController = UIApplication.shared.keyWindow?.rootViewController
+        
+        guard let mainNavigationController = rootViewController as? MainNavigationController else {return}
+        
+        let homeViewController = HomeViewController()
+        mainNavigationController.viewControllers = [homeViewController]
+        UserDefaults.standard.setUserLoggedIn(true)
+        
+        self.dismiss(animated: true, completion: nil)
     }
 }
 
